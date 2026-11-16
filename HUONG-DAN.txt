@@ -1,0 +1,20 @@
+HÁN NGỮ MỖI NGÀY · Web app cài được lên màn hình chính
+
+1. ĐƯA LÊN MẠNG (chỉ làm 1 lần, miễn phí)
+   Web app cần nằm trên một trang web có https. Cách dễ nhất:
+   - Netlify Drop: mở https://app.netlify.com/drop trên máy tính,
+     kéo cả thư mục "hanngu-app" vào. Đăng nhập để giữ trang lâu dài.
+   - Hoặc GitHub Pages: tạo kho (repository), tải các tệp này lên,
+     vào Settings > Pages để bật.
+   Bạn sẽ nhận được một đường link, ví dụ https://ten-cua-ban.netlify.app
+
+2. CÀI LÊN ĐIỆN THOẠI
+   - iPhone: mở link bằng Safari > nút Chia sẻ > "Thêm vào MH chính".
+   - Android: mở link bằng Chrome > menu ⋮ > "Cài đặt ứng dụng"
+     (hoặc "Thêm vào màn hình chính").
+
+3. LƯU Ý
+   - Mở app một lần khi có mạng, sau đó dùng được cả khi offline.
+   - Giọng đọc lấy từ điện thoại: cần có giọng tiếng Trung.
+   - Phần Nói dùng micro trên bàn phím (thêm bàn phím tiếng Trung).
+   - Tiến độ (tab HSK đang học) được lưu trên chính máy đó.
