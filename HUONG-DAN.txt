@@ -1,4 +1,4 @@
-HÁN NGỮ MỖI NGÀY · Web app học tiếng Trung HSK 1–3
+CARROT IS LEARNING · Web app học tiếng Trung HSK 1–3
 
 CÁC TỆP TRONG GÓI
   index.html            Toàn bộ app (20 bài, nghe · đọc · nói · viết)
@@ -29,5 +29,9 @@ CÁC TỆP TRONG GÓI
 4. LƯU Ý
    - Mở app một lần khi có mạng, sau đó dùng được cả khi offline.
    - Giọng đọc lấy từ điện thoại: cần có giọng tiếng Trung.
-   - Phần Nói: bấm vào ô, dùng micro trên bàn phím để đọc
-     (nên thêm bàn phím tiếng Trung Giản thể).
+   - Phần Nói: bấm nút micro trong app rồi đọc to, xong bấm Kiểm tra
+     (cần có mạng; lần đầu chọn "Cho phép" dùng micro).
+     Chạy được trên Chrome (Android/máy tính) và Safari (iPhone, iOS 14.5+,
+     cần bật Đọc chính tả trong Cài đặt > Cài đặt chung > Bàn phím).
+     Trình duyệt không hỗ trợ (vd. Firefox) sẽ hiện ô nhập: bấm vào ô,
+     dùng micro trên bàn phím để đọc (nên thêm bàn phím tiếng Trung Giản thể).

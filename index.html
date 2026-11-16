@@ -11,9 +11,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Hán Ngữ">
+<meta name="apple-mobile-web-app-title" content="Carrot">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}</style>
-<title>Hán Ngữ Mỗi Ngày</title>
+<title>Carrot is learning</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Noto+Serif+SC:wght@600&display=swap">
@@ -207,7 +207,7 @@ body.showpy .pyh{display:block!important}
 <body>
 
 
-<div class="inst" id="inst" hidden><div class="inst-in"><span class="inst-ic">汉</span><div class="inst-tx"><b>Cài Hán Ngữ lên màn hình chính</b><span id="inst-msg">Mở như app thật, học cả khi không có mạng.</span></div><button class="inst-btn" id="inst-btn" type="button" hidden>Cài đặt</button><button class="inst-x" id="inst-x" type="button" aria-label="Ẩn hướng dẫn cài đặt">×</button></div></div>
+<div class="inst" id="inst" hidden><div class="inst-in"><span class="inst-ic">汉</span><div class="inst-tx"><b>Cài Carrot is learning lên màn hình chính</b><span id="inst-msg">Mở như app thật, học cả khi không có mạng.</span></div><button class="inst-btn" id="inst-btn" type="button" hidden>Cài đặt</button><button class="inst-x" id="inst-x" type="button" aria-label="Ẩn hướng dẫn cài đặt">×</button></div></div>
 <div class="app" id="app"></div>
 <div class="foot" id="foot" hidden><div class="foot-in"><div class="fb" id="fb" hidden></div><div class="row"><button class="skip" id="skip" type="button" hidden>Bỏ qua</button><button class="cta" id="cta" type="button">KIỂM TRA</button></div></div></div>
 
@@ -684,7 +684,34 @@ function zhVoice(){try{var v=speechSynthesis.getVoices();return v.find(function(
 function say(t,slow){try{speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(t);u.lang='zh-CN';u.rate=slow?0.5:0.8;var v=zhVoice();if(v)u.voice=v;speechSynthesis.speak(u);}catch(e){}}
 function checkVoice(){try{var v=speechSynthesis.getVoices();if(v.length)hasZh=!!zhVoice();}catch(e){hasZh=false;}}
 checkVoice();try{speechSynthesis.onvoiceschanged=function(){checkVoice();};}catch(e){hasZh=false;}
-var DICT=null;try{if(window.claude&&claude.use)claude.use('dictation').then(function(d){DICT=d||null;}).catch(function(){});}catch(e){}
+// Nhận dạng giọng nói của trình duyệt (Chrome, Safari iOS 14.5+), cùng giao diện với dictation của Claude
+function webDict(){
+  var SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return null;
+  var subs={p:[],f:[],s:[]},cur=null;
+  var ERR={'not-allowed':'not_granted','service-not-allowed':'unavailable','language-not-supported':'unavailable','network':'network','no-speech':'viewer_stopped'};
+  function emit(k,e){subs[k].slice().forEach(function(f){try{f(e);}catch(x){}});}
+  function on(k){return function(f){subs[k].push(f);return function(){var i=subs[k].indexOf(f);if(i>=0)subs[k].splice(i,1);};};}
+  return {web:true,onPartial:on('p'),onFinal:on('f'),onState:on('s'),
+    start:function(){return new Promise(function(res,rej){
+      if(cur){cur._aborted=true;try{cur.abort();}catch(e){}}
+      var r=new SR(),started=false,err=null;cur=r;
+      // một câu ngắn mỗi lần: continuous=false tránh lỗi lặp/mất kết quả của Chrome Android
+      r.lang='zh-CN';r.interimResults=true;r.continuous=false;r.maxAlternatives=1;
+      r.onstart=function(){if(cur!==r)return;started=true;emit('s',{state:'listening'});res();};
+      // luôn dựng lại cả câu từ toàn bộ kết quả, gửi dạng partial (bên dùng ghép got+part)
+      r.onresult=function(e){if(cur!==r)return;var t='';for(var i=0;i<e.results.length;i++)t+=e.results[i][0].transcript;emit('p',{text:t});};
+      r.onerror=function(e){err=e.error==='aborted'?(r._aborted?'stopped':'viewer_stopped'):(ERR[e.error]||'upstream_error');};
+      r.onend=function(){var mine=cur===r;if(mine)cur=null;
+        var w=r._waiters||[];r._waiters=null;
+        if(!started)rej({code:err||'unavailable'});
+        else if(mine)emit('s',{state:'idle',reason:err||'viewer_stopped'});
+        w.forEach(function(f){f();});};
+      try{r.start();}catch(e){cur=null;rej({code:'unavailable'});}
+    });},
+    stop:function(){return new Promise(function(res){var r=cur;if(!r){res();return;}(r._waiters=r._waiters||[]).push(res);try{r.stop();}catch(e){res();}});}
+  };
+}
+var DICT=null;try{if(window.claude&&claude.use)claude.use('dictation').then(function(d){DICT=d||null;}).catch(function(){});else DICT=webDict();}catch(e){}
 
 var app=document.getElementById('app'),foot=document.getElementById('foot'),cta=document.getElementById('cta'),fb=document.getElementById('fb'),skip=document.getElementById('skip');
 var SPK='<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9a4 4 0 0 1 0 6"/><path d="M18.5 6.5a8 8 0 0 1 0 11"/></svg>';
@@ -698,7 +725,7 @@ try{HSK=+localStorage.getItem('hanyu-hsk')||1;if(!(HSK>=1&&HSK<=3))HSK=1;}catch(
 function stopAll(){if(S&&S.cleanup){S.cleanup();S.cleanup=null;}S=null;foot.hidden=true;}
 function home(){
   stopAll();CUR=null;
-  var h='<div class="brand"><div class="seal han">汉</div><div><b>Hán Ngữ Mỗi Ngày</b><small>Tiếng Trung cho người Việt · HSK 1–3</small></div></div>';
+  var h='<div class="brand"><div class="seal han">汉</div><div><b>Carrot is learning</b><small>Tiếng Trung cho người Việt · HSK 1–3</small></div></div>';
   h+='<div class="tabs" role="tablist">'+[1,2,3].map(function(k){return '<button class="tab'+(k===HSK?' on':'')+'" type="button" role="tab" aria-selected="'+(k===HSK)+'" data-hsk="'+k+'"><b>HSK '+k+'</b><span>'+HSKD[k]+'</span></button>';}).join('')+'</div><div class="lessons">';
   var LVN=['','Cấp 1 · Nhập môn','Cấp 2 · Cơ bản','Cấp 3 · Nâng cao'],LVD=['','Có pinyin ở mọi nơi','Câu dài hơn, thêm chữ gây nhiễu, vẫn có pinyin','Nghe chọn chữ Hán, câu dài hơn'],lastLv=0;
   LESSONS.filter(function(L){return L.hsk===HSK;}).forEach(function(L){if(L.hsk===1&&L.lv!==lastLv){lastLv=L.lv;h+='<p class="lvh"><b>'+LVN[L.lv]+'</b><span>'+LVD[L.lv]+'</span></p>';}h+='<button class="lesson" type="button" data-l="'+L.n+'"><span class="num han">'+L.icon+'</span><span class="txt"><b>Bài '+L.n+' · '+L.title+'</b><span>'+L.sub+'</span></span></button>';});
@@ -896,7 +923,12 @@ var U={
      if(e.state==='idle'&&(st==='rec'||st==='starting')){
        var r=e.reason;
        if(r==='viewer_stopped'||r==='time_limit'||r==='hidden'){check();return;}
-       if(r&&r!=='stopped'){clearTimeout(safety);setState('idle');heard.textContent=failMsg(r);}}});
+       if(r&&r!=='stopped'){if(webFallback(r))return;clearTimeout(safety);setState('idle');heard.textContent=failMsg(r);}}});
+   // micro của trình duyệt không dùng được trên máy này → quay về ô nhập (micro trên bàn phím)
+   function webFallback(c){if(!DICT||!DICT.web||!(c==='unavailable'||c==='not_granted'||c==='network'))return false;
+     S.cleanup&&S.cleanup();S.cleanup=null;DICT=null;render();
+     var h=document.getElementById('heard');if(h)h.textContent='Micro trong app không dùng được trên máy này. Bấm vào ô, chạm micro trên bàn phím để đọc.';
+     return true;}
    function check(){
      if(st!=='rec'&&st!=='starting')return;
      clearTimeout(safety);setState('checking');feedback('');
@@ -911,7 +943,7 @@ var U={
      try{speechSynthesis.cancel();}catch(x){}
      setState('starting');heard.textContent='Đang mở micro…';
      p.then(function(){if(st==='starting'){setState('rec');heard.textContent='Đọc to câu trên, xong thì bấm Kiểm tra';}clearTimeout(safety);safety=setTimeout(check,20000);})
-      .catch(function(err){if(st==='done'||st==='checking')return;clearTimeout(safety);setState('idle');heard.textContent=failMsg(err&&err.code);});
+      .catch(function(err){if(st==='done'||st==='checking')return;if(webFallback(err&&err.code))return;clearTimeout(safety);setState('idle');heard.textContent=failMsg(err&&err.code);});
    };},
  write:function(s){
    var st=STROKES[s.h],cv=document.getElementById('cv'),box=document.getElementById('wbox'),ctx=cv.getContext('2d'),r=cv.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
