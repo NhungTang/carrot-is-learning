@@ -1,20 +1,33 @@
-HÁN NGỮ MỖI NGÀY · Web app cài được lên màn hình chính
+HÁN NGỮ MỖI NGÀY · Web app học tiếng Trung HSK 1–3
 
-1. ĐƯA LÊN MẠNG (chỉ làm 1 lần, miễn phí)
-   Web app cần nằm trên một trang web có https. Cách dễ nhất:
-   - Netlify Drop: mở https://app.netlify.com/drop trên máy tính,
-     kéo cả thư mục "hanngu-app" vào. Đăng nhập để giữ trang lâu dài.
-   - Hoặc GitHub Pages: tạo kho (repository), tải các tệp này lên,
-     vào Settings > Pages để bật.
-   Bạn sẽ nhận được một đường link, ví dụ https://ten-cua-ban.netlify.app
+CÁC TỆP TRONG GÓI
+  index.html            Toàn bộ app (20 bài, nghe · đọc · nói · viết)
+  sw.js                 Cho phép dùng khi không có mạng
+  manifest.webmanifest  Tên, màu và biểu tượng khi cài lên điện thoại
+  icons/                Biểu tượng app
+  render.yaml           Cấu hình deploy lên Render
 
-2. CÀI LÊN ĐIỆN THOẠI
+1. ĐƯA LÊN GITHUB
+   - github.com > New repository > tên "hanngu-app" > Public > Create.
+   - Bấm "uploading an existing file", kéo TẤT CẢ tệp BÊN TRONG
+     thư mục này vào (không kéo cả thư mục) > Commit changes.
+   - Nếu repo đã có tệp cũ: Add file > Upload files, kéo tất cả vào
+     để ghi đè > Commit changes.
+
+2. DEPLOY LÊN RENDER (làm 1 lần)
+   - dashboard.render.com > New > Blueprint > chọn repo "hanngu-app" > Apply.
+   - Hoặc: New > Static Site > chọn repo, Build Command để trống,
+     Publish directory là "."
+   - Sau khoảng 1 phút có link dạng https://hanngu.onrender.com
+   - Mỗi lần cập nhật tệp trên GitHub, Render tự deploy lại.
+
+3. CÀI LÊN ĐIỆN THOẠI
    - iPhone: mở link bằng Safari > nút Chia sẻ > "Thêm vào MH chính".
-   - Android: mở link bằng Chrome > menu ⋮ > "Cài đặt ứng dụng"
-     (hoặc "Thêm vào màn hình chính").
+   - Android: mở link bằng Chrome > bấm nút "Cài đặt" trong app,
+     hoặc menu ⋮ > "Cài đặt ứng dụng".
 
-3. LƯU Ý
+4. LƯU Ý
    - Mở app một lần khi có mạng, sau đó dùng được cả khi offline.
    - Giọng đọc lấy từ điện thoại: cần có giọng tiếng Trung.
-   - Phần Nói dùng micro trên bàn phím (thêm bàn phím tiếng Trung).
-   - Tiến độ (tab HSK đang học) được lưu trên chính máy đó.
+   - Phần Nói: bấm vào ô, dùng micro trên bàn phím để đọc
+     (nên thêm bàn phím tiếng Trung Giản thể).
