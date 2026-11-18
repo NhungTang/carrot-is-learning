@@ -142,7 +142,9 @@ body.showpy .pyh{display:block!important}
 .mic{width:100%;max-width:380px;height:72px;border-radius:22px;border:2px solid var(--line);background:var(--surface);color:var(--accent-deep);display:flex;gap:12px;justify-content:center;align-items:center;box-shadow:0 5px 0 var(--line);font-weight:700;font-size:18px;transition:transform .1s}
 .mic:active{transform:translateY(3px);box-shadow:0 2px 0 var(--line)}
 .mic .mi{width:44px;height:44px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none}.mic .mi svg{width:24px;height:24px}
-.mic .on,.mic .wave{display:none}.mic.rec .on,.mic.rec .wave{display:inline-flex}.mic.rec .off{display:none}
+.mic .on,.mic .wave,.mic .wt{display:none}.mic.rec .on,.mic.rec .wave{display:inline-flex}.mic.rec .off,.mic.wait .off{display:none}
+.mic.wait .wt{display:inline-flex;align-items:center;gap:8px;color:var(--muted)}.mic.wait{background:var(--surface-2)}.mic.wait .mi{background:var(--muted)}
+.mic.rec .mi{animation:pulse 1.2s ease-in-out infinite}
 .wave{align-items:center;gap:4px;height:28px}.wave i{width:5px;height:8px;border-radius:3px;background:var(--accent);animation:eq2 .9s ease-in-out infinite}
 .wave i:nth-child(2){animation-delay:.12s}.wave i:nth-child(3){animation-delay:.24s}.wave i:nth-child(4){animation-delay:.36s}.wave i:nth-child(5){animation-delay:.48s}
 @keyframes eq2{50%{height:26px}}
@@ -834,7 +836,14 @@ function esc(t){return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
 /* ================= ÂM THANH ================= */
 var hasZh=null;
 function zhVoice(){try{var v=speechSynthesis.getVoices();return v.find(function(x){return /^zh[-_](CN|Hans)/i.test(x.lang);})||v.find(function(x){return /^zh/i.test(x.lang);});}catch(e){return null;}}
-function say(t,slow){try{speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(t);u.lang='zh-CN';u.rate=slow?0.5:0.8;var v=zhVoice();if(v)u.voice=v;speechSynthesis.speak(u);}catch(e){}}
+var TTS_UNTIL=0,TTS_TOK=0;function ttsQuiet(){return Date.now()>TTS_UNTIL;}
+function say(t,slow){try{speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(t);u.lang='zh-CN';u.rate=slow?0.4:0.8;var v=zhVoice();if(v)u.voice=v;
+  var tok=++TTS_TOK;TTS_UNTIL=Date.now()+Math.min(15000,hanOnly(t).length*(slow?900:450)+1500);
+  u.onend=u.onerror=function(){if(tok===TTS_TOK)TTS_UNTIL=Date.now()+900;};speechSynthesis.speak(u);}catch(e){}}
+/* keep the Claude mic open across speaking items so only the first tap waits for it to connect */
+function warmOK(){return !!(DICT&&!DICT.isSR&&!KBD);}
+function warmMic(){if(warmOK()&&!DICT.active()){try{DICT.start({language:'zh'}).catch(function(){});}catch(e){}}}
+function coolMic(){try{if(DICT&&!DICT.isSR&&DICT.active())DICT.stop().catch(function(){});}catch(e){}}
 function checkVoice(){try{var v=speechSynthesis.getVoices();if(v.length)hasZh=!!zhVoice();}catch(e){hasZh=false;}}
 checkVoice();try{speechSynthesis.onvoiceschanged=function(){checkVoice();};}catch(e){hasZh=false;}
 var KBD=false;try{KBD=localStorage.getItem('hanyu-kbd2')==='1';}catch(e){}
@@ -865,7 +874,7 @@ function srAdapter(){var SR=window.SpeechRecognition||window.webkitSpeechRecogni
       try{r.start();}catch(x){rec=null;emit('s',{state:'idle',reason:'upstream_error'});rej({code:'upstream_error',message:String(x)});}
     });},
     stop:function(){return new Promise(function(res){if(!rec){res();return;}stopping=true;waiters.push(res);try{rec.stop();}catch(x){res();}});},
-    active:function(){return !!rec;},
+    isSR:true,active:function(){return !!rec;},
     onPartial:on('p'),onFinal:on('f'),onState:on('s')};}
 var DICT=null;
 try{if(window.claude&&claude.use)claude.use('dictation').then(function(d){DICT=d||srAdapter();}).catch(function(){DICT=srAdapter();});else DICT=srAdapter();}catch(e){DICT=srAdapter();}
@@ -881,7 +890,7 @@ var CARROT="<svg width='32' height='32' aria-hidden='true' xmlns='http://www.w3.
 var S=null,CUR=null,HSK=1,HSKD=['','Nhập môn','Sơ cấp','Trung cấp'];
 var HELLO=['Hôm nay học một chút nhé ♡','Cà rốt chờ bạn nãy giờ đó ♡','加油！Cố lên nào ♡','Mỗi ngày một từ mới nha ♡'];
 try{HSK=+localStorage.getItem('hanyu-hsk')||1;if(!(HSK>=1&&HSK<=3))HSK=1;}catch(e){}
-function stopAll(){if(S&&S.cleanup){S.cleanup();S.cleanup=null;}S=null;foot.hidden=true;prevB.hidden=true;}
+function stopAll(){coolMic();if(S&&S.cleanup){S.cleanup();S.cleanup=null;}S=null;foot.hidden=true;prevB.hidden=true;}
 function home(){
   stopAll();CUR=null;
   var h='<div class="brand"><div class="seal">'+CARROT+'</div><div><b>Carrot is learning</b><small>Tiếng Trung cho người Việt · HSK 1–3</small></div></div><div class="hello">'+HELLO[Math.floor(Math.random()*HELLO.length)]+'</div>';
@@ -951,6 +960,7 @@ function buildNew(k,L){
       .concat(L.builds.map(function(b){var a=hanOnly(b[1]);return {t:'build',vn:b[0],ans:a,bank:bankFor(a,L)};}));}
 }
 function start(k){
+  if(k==='noi'||k==='the')warmMic();
   var L=CUR,q,name;
   if(k==='all'){name='Ôn tất cả Bài '+L.n;q=[];['nghe','doc','noi','viet','cau'].forEach(function(s){q=q.concat(shuffle(build(s,L).filter(function(x){return x.t!=='rad'&&x.t!=='gram';})).slice(0,s==='cau'?3:4));});q=shuffle(q);}
   else{name=SKILLS.filter(function(s){return s[0]===k;})[0][1]+' · Bài '+L.n;q=build(k,L);}
@@ -960,7 +970,7 @@ function start(k){
 /* ================= BỘ MÁY BÀI LUYỆN ================= */
 function setCta(label,on,fn){cta.textContent=label;cta.setAttribute('aria-disabled',on?'false':'true');cta.onclick=function(){if(cta.getAttribute('aria-disabled')==='true')return;fn();};}
 function feedback(kind,title,detail){foot.className='foot'+(kind?' '+kind:'');fb.hidden=!kind;if(kind)fb.innerHTML=title+(detail?'<small>'+detail+'</small>':'');}
-function next(){S.i++;if(S.i>=S.queue.length)finish();else render();}
+function next(){S.i++;if(S.i>=S.queue.length)finish();else{var t=S.queue[S.i].t;if(t==='speak'||t==='card')warmMic();render();}}
 function similar(h,pool){var n=hanOnly(h).length;var same=shuffle(pool.filter(function(x){return x!==h&&hanOnly(x).length===n;})),rest=shuffle(pool.filter(function(x){return x!==h&&hanOnly(x).length!==n;}));return same.concat(rest).slice(0,3);}
 var KINDS={hearWord:'Nghe',rad:'Bộ thủ',radWhich:'Bộ thủ',radMean:'Bộ thủ',tone:'Nghe',hearMean:'Nghe',tap:'Nghe',pick:'Đọc',pinyin:'Đọc',match:'Đọc',chat:'Đọc',speak:'Nói',card:'Thẻ từ',gram:'Cấu trúc',gfill:'Cấu trúc',gorder:'Cấu trúc',write:'Viết',build:'Viết'};
 function render(){
@@ -971,6 +981,7 @@ function render(){
   window.scrollTo(0,0);
   document.getElementById('quit').onclick=function(){lessonPage(CUR.n);};
   bindSay();U[s.t](s);
+  if(!document.getElementById('mic'))coolMic();
   var canBack=(s.t==='rad'||s.t==='gram')&&S.i>0&&S.queue[S.i-1].t===s.t;prevB.hidden=!canBack;prevB.onclick=function(){if(S.i>0&&S.queue[S.i-1].t===s.t){S.i--;render();}};
   var pt=document.getElementById('pyt');document.body.classList.toggle('showpy',!!S.showpy);
   if(pt){pt.setAttribute('aria-pressed',S.showpy?'true':'false');pt.onclick=function(){S.showpy=!S.showpy;document.body.classList.toggle('showpy',S.showpy);pt.setAttribute('aria-pressed',S.showpy?'true':'false');};}
@@ -995,7 +1006,7 @@ function opts(list){return '<div class="opts">'+list.map(function(o){return '<bu
 function tiles(bank){return '<div class="answer" id="ans"></div><div class="bank">'+shuffle(bank).map(function(w){return '<button class="tile" type="button" data-w="'+w+'"><span class="han">'+w+'</span><small'+pyc()+'>'+tpy(w)+'</small></button>';}).join('')+'</div>';}
 function wordLabel(k){var w=getW(k);return '<span class="han" style="font-size:'+(hanOnly(k).length>4?20:26)+'px">'+k+'</span>'+(w?'<small'+pyc()+'>'+colorPy(w.p)+'</small>':'');}
 
-function micUI(){return (DICT&&!KBD?'<div class="micwrap"><button class="mic" type="button" id="mic" aria-label="Bấm để nói"><span class="mi">'+MICSVG+'</span><span class="off">Bấm để nói</span><span class="on">Đang nghe…</span><span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></button><div class="heard" id="heard">Bấm nút rồi đọc to, nói xong app tự chấm</div><button class="linkbtn" type="button" id="usekbd">Không ghi âm được? Dùng micro bàn phím</button></div>':'<div class="micwrap"><label class="vlabel" for="vin">Bấm vào ô, chạm <b>micro trên bàn phím</b> rồi đọc to</label><input id="vin" class="vin" type="text" lang="zh-CN" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Đọc vào đây…"><div class="heard" id="heard"></div><details class="how"><summary>Không thấy micro hoặc máy ghi sai chữ?</summary><p><b>iPhone:</b> Cài đặt → Cài đặt chung → Bàn phím → thêm bàn phím Tiếng Trung (Giản thể) và bật Đọc chính tả. Khi đọc, chuyển sang bàn phím Trung (biểu tượng quả địa cầu) rồi chạm micro.</p><p><b>Android (Gboard):</b> Cài đặt Gboard → Ngôn ngữ → thêm Tiếng Trung (Giản thể). Chuyển sang bàn phím Trung rồi chạm micro.</p><p>Nếu để bàn phím tiếng Việt, máy có thể ghi ra chữ Latin như "ni hao", app vẫn so được với pinyin.</p></details>'+(DICT?'<button class="linkbtn" type="button" id="usemic">Quay lại nút ghi âm</button>':'')+'</div>');}
+function micUI(){return (DICT&&!KBD?'<div class="micwrap"><button class="mic" type="button" id="mic" aria-label="Bấm để nói"><span class="mi">'+MICSVG+'</span><span class="off">Bấm để nói</span><span class="wt"><span class="spin"></span>Đợi chút…</span><span class="on">Đang nghe…</span><span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></button><div class="heard" id="heard">Bấm nút rồi đọc to, nói xong app tự chấm</div><button class="linkbtn" type="button" id="usekbd">Không ghi âm được? Dùng micro bàn phím</button></div>':'<div class="micwrap"><label class="vlabel" for="vin">Bấm vào ô, chạm <b>micro trên bàn phím</b> rồi đọc to</label><input id="vin" class="vin" type="text" lang="zh-CN" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Đọc vào đây…"><div class="heard" id="heard"></div><details class="how"><summary>Không thấy micro hoặc máy ghi sai chữ?</summary><p><b>iPhone:</b> Cài đặt → Cài đặt chung → Bàn phím → thêm bàn phím Tiếng Trung (Giản thể) và bật Đọc chính tả. Khi đọc, chuyển sang bàn phím Trung (biểu tượng quả địa cầu) rồi chạm micro.</p><p><b>Android (Gboard):</b> Cài đặt Gboard → Ngôn ngữ → thêm Tiếng Trung (Giản thể). Chuyển sang bàn phím Trung rồi chạm micro.</p><p>Nếu để bàn phím tiếng Việt, máy có thể ghi ra chữ Latin như "ni hao", app vẫn so được với pinyin.</p></details>'+(DICT?'<button class="linkbtn" type="button" id="usemic">Quay lại nút ghi âm</button>':'')+'</div>');}
 var V={
  hearWord:function(s){s.list=shuffle([s.h].concat(similar(s.h,s.pool)));return '<p class="q">Nghe và chọn từ bạn nghe được</p><div class="card">'+audio(s.h)+'<div class="mean">Bấm loa để nghe lại</div></div>'+opts(s.list.map(function(k){return {v:k,html:'<span class="han" style="font-size:'+(hanOnly(k).length>4?20:30)+'px">'+k+'</span><small'+pyc()+'>'+colorPy(getW(k).p)+'</small>'};}));},
  rad:function(s){var r=RAD[s.c];return '<p class="q">Nhớ chữ qua bộ thủ</p><div class="card"><div class="big han">'+s.c+'</div><div class="py">'+colorPy(r.py)+'</div><div class="mean">'+r.m+'</div><div class="parts">'+r.parts.map(function(p){return '<div class="part"><span class="han">'+p[0]+'</span><b>'+p[2]+'</b>'+(p[1]?'<small>'+p[1]+'</small>':'')+'</div>';}).join('<span class="plus">+</span>')+'</div><div class="note">'+r.story+'</div>'+audio(s.c)+'</div>';},
@@ -1078,12 +1089,15 @@ var U={
      vin.onkeydown=function(e){if(e.key==='Enter'){e.preventDefault();vcheck();}};
      skip.textContent='Không nói được lúc này';skip.hidden=false;skip.onclick=function(){S.done=true;skip.hidden=true;vin.disabled=true;reveal();feedback('good','Đã bỏ qua',isCard?s.h+' · '+W0.p+' · '+W0.m:'Nhớ tự đọc to câu này vài lần nhé.');setCta('TIẾP TỤC',true,next);};
      return;}
-   var heard=document.getElementById('heard'),got='',part='',st='idle',safety=null,tries=0,useLang=true;
+   var heard=document.getElementById('heard'),got='',part='',st='idle',safety=null,tries=0,useLang=true,WM=!DICT.isSR;
+   function goRec(){setState('rec');heard.textContent='Đang nghe, cứ đọc to nhé';clearTimeout(safety);safety=setTimeout(idleOut,40000);}
+   function idleOut(){if(st!=='rec')return;if((got+part).trim()){check();return;}if(WM)coolMic();setState('idle');heard.textContent='Micro tạm tắt. Bấm để nói tiếp nhé.';}
    var target=hanOnly(s.h),targetPy=sylls(getW(s.h).p),th=s.h.indexOf('，')>=0?0.5:(target.length>=5?0.6:0.75);
    mic.insertAdjacentHTML('afterend','<div class="recbadge" id="rec" hidden><span class="rdot"></span>Đang ghi âm<span class="bars"><i></i><i></i><i></i><i></i></span></div><div class="recbadge chk" id="chk" hidden><span class="spin"></span>Đang kiểm tra…</div>');
    var rec=document.getElementById('rec'),chk=document.getElementById('chk');
    function setState(n){st=n;
-     mic.classList.toggle('rec',n==='rec'||n==='starting');
+     if(n==='rec'&&!mic.classList.contains('rec')){try{navigator.vibrate&&navigator.vibrate(40);}catch(x){}}
+     mic.classList.toggle('rec',n==='rec');mic.classList.toggle('wait',n==='starting');
      var locked=n==='checking'||n==='done';mic.setAttribute('aria-disabled',locked?'true':'false');
      rec.hidden=!(n==='rec'||n==='starting');chk.hidden=n!=='checking';
      if(n==='idle')setCta('KIỂM TRA',false,function(){});
@@ -1099,27 +1113,30 @@ var U={
    function evaluate(){
      if(st!=='checking')return;
      var text=(got+' '+part).trim();tries++;
+     if(!text&&WM&&DICT.active()){goRec();return;}
      if(!text){setState('idle');heard.textContent='Máy chưa nghe thấy gì. Bấm micro, đợi hiện “Đang ghi âm” rồi mới đọc to.'+(tries>=2?' Nếu vẫn không được, bấm “Dùng micro bàn phím” bên dưới.':'');return;}
      heard.textContent='';
      if(score(text)>=th){setState('done');win();}
-     else if(++wrongs>=2){setState('done');later();}else{setState('idle');feedback('wrong','Chưa chuẩn, thử lại nhé',tries>=3?'Nghe chậm rồi đọc lại, hoặc bấm “Không nói được lúc này”.':'Chú ý thanh điệu theo màu, rồi bấm micro đọc lại.');}}
+     else if(++wrongs>=2){setState('done');later();}else if(WM&&DICT.active()){got='';part='';goRec();feedback('wrong','Chưa chuẩn, đọc lại nhé','Micro vẫn đang nghe, cứ đọc lại luôn.');}else{setState('idle');feedback('wrong','Chưa chuẩn, thử lại nhé',tries>=3?'Nghe chậm rồi đọc lại, hoặc bấm “Không nói được lúc này”.':'Chú ý thanh điệu theo màu, rồi bấm micro đọc lại.');}}
    var MSG={not_granted:'Bạn chưa cho phép dùng micro. Bấm “Không nói được lúc này” để đi tiếp.',dismissed:'Bấm micro lần nữa và chọn Cho phép.',rate_limited:'Máy đang bận, đợi vài giây rồi bấm micro lại.',upstream_error:'Micro bị lỗi, bấm micro thử lại nhé.',hidden:'Micro bị ngắt khi đang mở. Bấm micro lần nữa nhé.',stopped:'Micro đã dừng trước khi kịp ghi. Bấm micro lần nữa nhé.',viewer_stopped:'Đã dừng. Bấm micro để ghi âm lại.'};
    function failMsg(c){if(c==='unavailable'){if(useLang){useLang=false;return 'Bấm micro lần nữa để thử lại.';}return 'Máy này chưa nhận dạng giọng nói được. Bấm “Không nói được lúc này” để đi tiếp.';}return MSG[c]||'Chưa ghi âm được, bấm micro thử lại.';}
    var silT=null;function arm(){clearTimeout(silT);silT=setTimeout(function(){if(st==='rec'&&(got+part).trim())check();},1400);}
-   var u1=DICT.onPartial(function(e){if(st!=='rec'&&st!=='starting'&&st!=='checking')return;part=e.text||'';if(part)arm();});
-   var u2=DICT.onFinal(function(e){if(st==='rec'||st==='starting'||st==='checking'){got+=e.text;part='';if(st!=='checking')arm();}});
+   var u1=DICT.onPartial(function(e){if(!ttsQuiet())return;if(st!=='rec'&&st!=='starting'&&st!=='checking')return;part=e.text||'';if(part)arm();});
+   var u2=DICT.onFinal(function(e){if(!ttsQuiet())return;if(st==='rec'||st==='starting'||st==='checking'){got+=e.text;part='';if(st!=='checking')arm();}});
    var u3=DICT.onState(function(e){
-     if(e.state==='listening'&&st==='starting'){setState('rec');heard.textContent='Đang nghe, cứ đọc to nhé';}
+     if(e.state==='listening'&&st==='starting')goRec();
      if(e.state==='idle'&&(st==='rec'||st==='starting')){
        var r=e.reason;
        if(st==='rec'&&(r==='viewer_stopped'||r==='time_limit'||r==='hidden')){if(!(got+part).trim()){clearTimeout(safety);setState('idle');heard.textContent=r==='viewer_stopped'?'Đã dừng. Bấm micro để ghi âm lại.':'Micro tự tắt trước khi nghe được gì. Bấm micro rồi nói ngay nhé.';return;}check();return;}
        if(r!=='stopped'||st==='starting'){clearTimeout(safety);setState('idle');heard.textContent=failMsg(r||'stopped');}}});
+   if(WM&&DICT.active()){setState('starting');heard.textContent='Đợi chút…';}
    function check(){
      if(st!=='rec'&&st!=='starting')return;
      clearTimeout(safety);setState('checking');feedback('');
+     if(WM&&DICT.active()){setTimeout(evaluate,450);return;}
      var fin=false;function go(){if(fin)return;fin=true;evaluate();}
      DICT.stop().then(function(){setTimeout(go,400);},go);setTimeout(go,3000);}
-   S.cleanup=function(){u1();u2();u3();clearTimeout(safety);clearTimeout(silT);if(st==='rec'||st==='starting'){st='done';DICT.stop().catch(function(){});}};
+   S.cleanup=function(){u1();u2();u3();clearTimeout(safety);clearTimeout(silT);if(!WM&&(st==='rec'||st==='starting'))DICT.stop().catch(function(){});st='done';};
    mic.onclick=function(){
      if(st==='checking'||st==='done')return;
      if(st==='starting')return;
@@ -1129,7 +1146,7 @@ var U={
      var p=useLang?DICT.start({language:'zh'}):DICT.start();
      setState('starting');heard.textContent='Đang mở micro…';
      clearTimeout(safety);safety=setTimeout(function(){if(st==='starting'){DICT.stop().catch(function(){});setState('idle');heard.textContent='Micro chưa mở được. Bấm micro thử lại, hoặc dùng micro bàn phím bên dưới.';}},12000);
-     p.then(function(){if(st==='starting'){setState('rec');heard.textContent='Đang nghe, cứ đọc to nhé';}clearTimeout(safety);if(st==='rec')safety=setTimeout(check,30000);})
+     p.then(function(){if(st==='starting')goRec();})
       .catch(function(err){if(st==='done'||st==='checking')return;clearTimeout(safety);setState('idle');heard.textContent=failMsg(err&&err.code);});
    };},
  write:function(s){
@@ -1165,6 +1182,7 @@ var U={
  }
 };
 function finish(){
+  coolMic();
   foot.className='foot';fb.hidden=true;skip.hidden=true;prevB.hidden=true;
   var right=S.base-S.missed.length;
   var h='<div class="end"><div class="bigemo" aria-hidden="true">'+CARROT+'</div><div class="han">棒</div><h2>Xong '+S.name+'!</h2><p>Đúng ngay lần đầu '+Math.max(0,right)+'/'+S.base+' câu</p>';
