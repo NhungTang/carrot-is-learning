@@ -139,10 +139,17 @@ body.showpy .pyh{display:block!important}
 .part small{font-size:12px;color:var(--muted)}
 .plus{font-size:22px;color:var(--muted);font-weight:700}
 .micwrap{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:18px}
-.mic{width:86px;height:86px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;box-shadow:0 5px 0 var(--accent-deep)}
+.mic{width:100%;max-width:380px;height:72px;border-radius:22px;border:2px solid var(--line);background:var(--surface);color:var(--accent-deep);display:flex;gap:12px;justify-content:center;align-items:center;box-shadow:0 5px 0 var(--line);font-weight:700;font-size:18px;transition:transform .1s}
+.mic:active{transform:translateY(3px);box-shadow:0 2px 0 var(--line)}
+.mic .mi{width:44px;height:44px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;flex:none}.mic .mi svg{width:24px;height:24px}
+.mic .on,.mic .wave{display:none}.mic.rec .on,.mic.rec .wave{display:inline-flex}.mic.rec .off{display:none}
+.wave{align-items:center;gap:4px;height:28px}.wave i{width:5px;height:8px;border-radius:3px;background:var(--accent);animation:eq2 .9s ease-in-out infinite}
+.wave i:nth-child(2){animation-delay:.12s}.wave i:nth-child(3){animation-delay:.24s}.wave i:nth-child(4){animation-delay:.36s}.wave i:nth-child(5){animation-delay:.48s}
+@keyframes eq2{50%{height:26px}}
+.recbadge:not(.chk){display:none!important}
 @keyframes pulse{50%{transform:scale(1.06)}}
-.mic.rec{background:var(--bad);box-shadow:0 5px 0 var(--bad-deep);color:#fff;animation:pulse 1.2s ease-in-out infinite}
-.mic[aria-disabled="true"]{background:var(--surface-2);color:var(--muted);box-shadow:0 5px 0 var(--line);cursor:not-allowed;animation:none}
+.mic.rec{background:var(--accent-soft);border-color:var(--accent);box-shadow:0 5px 0 var(--accent)}
+.mic[aria-disabled="true"]{background:var(--surface-2);color:var(--muted);box-shadow:0 5px 0 var(--line);cursor:not-allowed}.mic[aria-disabled="true"] .mi{background:var(--muted)}
 .recbadge{display:flex;align-items:center;gap:8px;color:var(--bad);font-weight:700;font-size:15px;background:var(--bad-soft);border-radius:999px;padding:6px 14px}
 .recbadge.chk{color:var(--accent-deep);background:var(--accent-soft)}
 .rdot{width:10px;height:10px;border-radius:50%;background:var(--bad);animation:blink 1s steps(2) infinite}
@@ -836,20 +843,24 @@ function srAdapter(){var SR=window.SpeechRecognition||window.webkitSpeechRecogni
   var hs={p:[],f:[],s:[]},rec=null,stopping=false,waiters=[];
   function on(k){return function(h){hs[k].push(h);return function(){hs[k]=hs[k].filter(function(x){return x!==h;});};};}
   function emit(k,e){hs[k].slice().forEach(function(h){try{h(e);}catch(x){}});}
-  function code(err){return err==='not-allowed'||err==='service-not-allowed'?'not_granted':err==='language-not-supported'?'unavailable':err==='network'?'upstream_error':'upstream_error';}
+  function code(err){return err==='not-allowed'||err==='service-not-allowed'?'not_granted':err==='language-not-supported'?'unavailable':'upstream_error';}
   return {
     start:function(){return new Promise(function(res,rej){
       if(rec){res();return;}
-      var started=false,err=null,r;stopping=false;
+      var started=false,heard=false,err=null,t0=Date.now(),restarts=0,r;stopping=false;
       try{r=new SR();}catch(x){rej({code:'unavailable',message:String(x)});return;}
-      rec=r;r.lang='zh-CN';r.interimResults=true;r.continuous=true;r.maxAlternatives=1;
-      r.onstart=function(){started=true;emit('s',{state:'listening'});res();};
-      r.onresult=function(ev){var interim='';for(var i=ev.resultIndex;i<ev.results.length;i++){var x=ev.results[i];if(x.isFinal)emit('f',{text:x[0].transcript});else interim+=x[0].transcript;}emit('p',{text:interim});};
+      rec=r;r.lang='zh-CN';r.interimResults=true;r.continuous=false;r.maxAlternatives=1;
+      r.onstart=function(){if(!started){started=true;emit('s',{state:'listening'});res();}};
+      r.onresult=function(ev){var interim='';for(var i=ev.resultIndex;i<ev.results.length;i++){var x=ev.results[i];if(x.isFinal){if(x[0].transcript){heard=true;emit('f',{text:x[0].transcript});}}else interim+=x[0].transcript;}if(interim)heard=true;emit('p',{text:interim});};
       r.onerror=function(ev){if(ev.error!=='no-speech'&&ev.error!=='aborted')err=ev.error;};
-      r.onend=function(){rec=null;var reason=stopping?'stopped':err?code(err):'time_limit';
+      r.onend=function(){
+        /* ended by itself before the viewer said anything: listen again */
+        if(!stopping&&!err&&!heard&&restarts<12&&Date.now()-t0<30000){restarts++;setTimeout(function(){if(stopping||rec!==r)return;try{r.start();}catch(x){finish();}},120);return;}
+        finish();};
+      function finish(){rec=null;var reason=stopping?'stopped':err?code(err):'time_limit';
         emit('p',{text:''});emit('s',{state:'idle',reason:reason});
         if(!started)rej({code:stopping?'stopped':err?code(err):'upstream_error',message:err||''});
-        var w=waiters;waiters=[];w.forEach(function(f){f();});};
+        var w=waiters;waiters=[];w.forEach(function(f){f();});}
       emit('s',{state:'starting'});
       try{r.start();}catch(x){rec=null;emit('s',{state:'idle',reason:'upstream_error'});rej({code:'upstream_error',message:String(x)});}
     });},
@@ -984,7 +995,7 @@ function opts(list){return '<div class="opts">'+list.map(function(o){return '<bu
 function tiles(bank){return '<div class="answer" id="ans"></div><div class="bank">'+shuffle(bank).map(function(w){return '<button class="tile" type="button" data-w="'+w+'"><span class="han">'+w+'</span><small'+pyc()+'>'+tpy(w)+'</small></button>';}).join('')+'</div>';}
 function wordLabel(k){var w=getW(k);return '<span class="han" style="font-size:'+(hanOnly(k).length>4?20:26)+'px">'+k+'</span>'+(w?'<small'+pyc()+'>'+colorPy(w.p)+'</small>':'');}
 
-function micUI(){return (DICT&&!KBD?'<div class="micwrap"><button class="mic" type="button" id="mic" aria-label="Bấm để ghi âm">'+MICSVG+'</button><div class="heard" id="heard">Bấm micro rồi đọc to câu trên</div><button class="linkbtn" type="button" id="usekbd">Không ghi âm được? Dùng micro bàn phím</button></div>':'<div class="micwrap"><label class="vlabel" for="vin">Bấm vào ô, chạm <b>micro trên bàn phím</b> rồi đọc to</label><input id="vin" class="vin" type="text" lang="zh-CN" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Đọc vào đây…"><div class="heard" id="heard"></div><details class="how"><summary>Không thấy micro hoặc máy ghi sai chữ?</summary><p><b>iPhone:</b> Cài đặt → Cài đặt chung → Bàn phím → thêm bàn phím Tiếng Trung (Giản thể) và bật Đọc chính tả. Khi đọc, chuyển sang bàn phím Trung (biểu tượng quả địa cầu) rồi chạm micro.</p><p><b>Android (Gboard):</b> Cài đặt Gboard → Ngôn ngữ → thêm Tiếng Trung (Giản thể). Chuyển sang bàn phím Trung rồi chạm micro.</p><p>Nếu để bàn phím tiếng Việt, máy có thể ghi ra chữ Latin như "ni hao", app vẫn so được với pinyin.</p></details>'+(DICT?'<button class="linkbtn" type="button" id="usemic">Quay lại nút ghi âm</button>':'')+'</div>');}
+function micUI(){return (DICT&&!KBD?'<div class="micwrap"><button class="mic" type="button" id="mic" aria-label="Bấm để nói"><span class="mi">'+MICSVG+'</span><span class="off">Bấm để nói</span><span class="on">Đang nghe…</span><span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span></button><div class="heard" id="heard">Bấm nút rồi đọc to, nói xong app tự chấm</div><button class="linkbtn" type="button" id="usekbd">Không ghi âm được? Dùng micro bàn phím</button></div>':'<div class="micwrap"><label class="vlabel" for="vin">Bấm vào ô, chạm <b>micro trên bàn phím</b> rồi đọc to</label><input id="vin" class="vin" type="text" lang="zh-CN" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Đọc vào đây…"><div class="heard" id="heard"></div><details class="how"><summary>Không thấy micro hoặc máy ghi sai chữ?</summary><p><b>iPhone:</b> Cài đặt → Cài đặt chung → Bàn phím → thêm bàn phím Tiếng Trung (Giản thể) và bật Đọc chính tả. Khi đọc, chuyển sang bàn phím Trung (biểu tượng quả địa cầu) rồi chạm micro.</p><p><b>Android (Gboard):</b> Cài đặt Gboard → Ngôn ngữ → thêm Tiếng Trung (Giản thể). Chuyển sang bàn phím Trung rồi chạm micro.</p><p>Nếu để bàn phím tiếng Việt, máy có thể ghi ra chữ Latin như "ni hao", app vẫn so được với pinyin.</p></details>'+(DICT?'<button class="linkbtn" type="button" id="usemic">Quay lại nút ghi âm</button>':'')+'</div>');}
 var V={
  hearWord:function(s){s.list=shuffle([s.h].concat(similar(s.h,s.pool)));return '<p class="q">Nghe và chọn từ bạn nghe được</p><div class="card">'+audio(s.h)+'<div class="mean">Bấm loa để nghe lại</div></div>'+opts(s.list.map(function(k){return {v:k,html:'<span class="han" style="font-size:'+(hanOnly(k).length>4?20:30)+'px">'+k+'</span><small'+pyc()+'>'+colorPy(getW(k).p)+'</small>'};}));},
  rad:function(s){var r=RAD[s.c];return '<p class="q">Nhớ chữ qua bộ thủ</p><div class="card"><div class="big han">'+s.c+'</div><div class="py">'+colorPy(r.py)+'</div><div class="mean">'+r.m+'</div><div class="parts">'+r.parts.map(function(p){return '<div class="part"><span class="han">'+p[0]+'</span><b>'+p[2]+'</b>'+(p[1]?'<small>'+p[1]+'</small>':'')+'</div>';}).join('<span class="plus">+</span>')+'</div><div class="note">'+r.story+'</div>'+audio(s.c)+'</div>';},
@@ -1094,20 +1105,21 @@ var U={
      else if(++wrongs>=2){setState('done');later();}else{setState('idle');feedback('wrong','Chưa chuẩn, thử lại nhé',tries>=3?'Nghe chậm rồi đọc lại, hoặc bấm “Không nói được lúc này”.':'Chú ý thanh điệu theo màu, rồi bấm micro đọc lại.');}}
    var MSG={not_granted:'Bạn chưa cho phép dùng micro. Bấm “Không nói được lúc này” để đi tiếp.',dismissed:'Bấm micro lần nữa và chọn Cho phép.',rate_limited:'Máy đang bận, đợi vài giây rồi bấm micro lại.',upstream_error:'Micro bị lỗi, bấm micro thử lại nhé.',hidden:'Micro bị ngắt khi đang mở. Bấm micro lần nữa nhé.',stopped:'Micro đã dừng trước khi kịp ghi. Bấm micro lần nữa nhé.',viewer_stopped:'Đã dừng. Bấm micro để ghi âm lại.'};
    function failMsg(c){if(c==='unavailable'){if(useLang){useLang=false;return 'Bấm micro lần nữa để thử lại.';}return 'Máy này chưa nhận dạng giọng nói được. Bấm “Không nói được lúc này” để đi tiếp.';}return MSG[c]||'Chưa ghi âm được, bấm micro thử lại.';}
-   var u1=DICT.onPartial(function(e){if(st!=='rec'&&st!=='starting'&&st!=='checking')return;part=e.text||'';});
-   var u2=DICT.onFinal(function(e){if(st==='rec'||st==='starting'||st==='checking'){got+=e.text;part='';}});
+   var silT=null;function arm(){clearTimeout(silT);silT=setTimeout(function(){if(st==='rec'&&(got+part).trim())check();},1400);}
+   var u1=DICT.onPartial(function(e){if(st!=='rec'&&st!=='starting'&&st!=='checking')return;part=e.text||'';if(part)arm();});
+   var u2=DICT.onFinal(function(e){if(st==='rec'||st==='starting'||st==='checking'){got+=e.text;part='';if(st!=='checking')arm();}});
    var u3=DICT.onState(function(e){
-     if(e.state==='listening'&&st==='starting'){setState('rec');heard.textContent='Đọc to câu trên, xong thì bấm Kiểm tra';}
+     if(e.state==='listening'&&st==='starting'){setState('rec');heard.textContent='Đang nghe, cứ đọc to nhé';}
      if(e.state==='idle'&&(st==='rec'||st==='starting')){
        var r=e.reason;
-       if(st==='rec'&&(r==='viewer_stopped'||r==='time_limit'||r==='hidden')){check();return;}
+       if(st==='rec'&&(r==='viewer_stopped'||r==='time_limit'||r==='hidden')){if(!(got+part).trim()){clearTimeout(safety);setState('idle');heard.textContent=r==='viewer_stopped'?'Đã dừng. Bấm micro để ghi âm lại.':'Micro tự tắt trước khi nghe được gì. Bấm micro rồi nói ngay nhé.';return;}check();return;}
        if(r!=='stopped'||st==='starting'){clearTimeout(safety);setState('idle');heard.textContent=failMsg(r||'stopped');}}});
    function check(){
      if(st!=='rec'&&st!=='starting')return;
      clearTimeout(safety);setState('checking');feedback('');
      var fin=false;function go(){if(fin)return;fin=true;evaluate();}
      DICT.stop().then(function(){setTimeout(go,400);},go);setTimeout(go,3000);}
-   S.cleanup=function(){u1();u2();u3();clearTimeout(safety);if(st==='rec'||st==='starting'){st='done';DICT.stop().catch(function(){});}};
+   S.cleanup=function(){u1();u2();u3();clearTimeout(safety);clearTimeout(silT);if(st==='rec'||st==='starting'){st='done';DICT.stop().catch(function(){});}};
    mic.onclick=function(){
      if(st==='checking'||st==='done')return;
      if(st==='starting')return;
@@ -1117,7 +1129,7 @@ var U={
      var p=useLang?DICT.start({language:'zh'}):DICT.start();
      setState('starting');heard.textContent='Đang mở micro…';
      clearTimeout(safety);safety=setTimeout(function(){if(st==='starting'){DICT.stop().catch(function(){});setState('idle');heard.textContent='Micro chưa mở được. Bấm micro thử lại, hoặc dùng micro bàn phím bên dưới.';}},12000);
-     p.then(function(){if(st==='starting'){setState('rec');heard.textContent='Đọc to câu trên, xong thì bấm Kiểm tra';}clearTimeout(safety);if(st==='rec')safety=setTimeout(check,30000);})
+     p.then(function(){if(st==='starting'){setState('rec');heard.textContent='Đang nghe, cứ đọc to nhé';}clearTimeout(safety);if(st==='rec')safety=setTimeout(check,30000);})
       .catch(function(err){if(st==='done'||st==='checking')return;clearTimeout(safety);setState('idle');heard.textContent=failMsg(err&&err.code);});
    };},
  write:function(s){
